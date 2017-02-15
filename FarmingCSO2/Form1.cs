@@ -42,6 +42,7 @@ namespace FarmingCSO2
         {
             InitializeComponent();
             Begin = false;
+            this.Text = "CSO2掛機小幫手";
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Location = new System.Drawing.Point(screenWidth / 2 - this.Width / 2 , screenHeight / 2 - this.Width / 2);
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -92,6 +93,7 @@ namespace FarmingCSO2
 
             if (Begin)
             {
+                TimerLabel.Hide();
                 button2.Text = "開始掛機";
                 Begin = false;
             }
