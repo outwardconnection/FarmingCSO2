@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.IO;
 using System.Configuration;
+using System.Timers;
 
 namespace FarmingCSO2
 {
@@ -28,6 +29,9 @@ namespace FarmingCSO2
         [DllImport("user32.dll", EntryPoint = "FindWindow", CharSet = CharSet.Auto)]
         private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);  //以視窗名稱獲得窗口句柄
 
+        [DllImport("kernel32.dll")]
+        private static extern uint GetTickCount();
+
         private bool Begin { set; get; }
         private Color[] startButtonColor = new Color[4];
         private IntPtr CSO2Window { set; get; }
@@ -37,8 +41,11 @@ namespace FarmingCSO2
         public Form1()
         {
             InitializeComponent();
-
             Begin = false;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
+            this.Location = new System.Drawing.Point(screenWidth / 2 - this.Width / 2 , screenHeight / 2 - this.Width / 2);
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -57,6 +64,13 @@ namespace FarmingCSO2
                 MessageBox.Show("not find cso2");
             }
             */
+        }
+
+        public static void run(object source, System.Timers.ElapsedEventArgs e)
+        {
+
+            Console.WriteLine("OK");
+
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -80,7 +94,6 @@ namespace FarmingCSO2
             {
                 button2.Text = "開始掛機";
                 Begin = false;
-
             }
             else
             {
@@ -88,6 +101,7 @@ namespace FarmingCSO2
                 {
                     button2.Text = "停止掛機";
                     Begin = true;
+                    TimerLabel.Show();
                     Farming();
                 }
                 else
@@ -105,10 +119,15 @@ namespace FarmingCSO2
             {
                 for (int i = 0; i < 1000; i++)
                 {
+                    if (i % 100 == 0)
+                    {
+                        TimerLabel.Text = "還剩" + (10 - i / 100).ToString() + "秒";
+                    }
                     if (!Begin) { return; }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
+                TimerLabel.Hide();
                 
                 ImitateOperating.MouseMoveTo(screenWidth/2, screenHeight/2);
 
@@ -118,18 +137,11 @@ namespace FarmingCSO2
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
-                //來回抖動
-                for(short i = 0 ; i < 10 ; i++)
+                //一直往右滑
+                for(short i = 0 ; i < 20 ; i++)
                 {
-                    ImitateOperating.MouseMove(screenWidth / 2, 0);
-                    for (short j = 0; j < 10; j++)
-                    {
-                        if (!Begin) { return; }
-                        Thread.Sleep(10);
-                        Application.DoEvents();
-                    }
-                    ImitateOperating.MouseMove( (-1*screenWidth / 2) , 0);
-                    for (short j = 0; j < 10; j++)
+                    ImitateOperating.MouseMove(screenWidth/2, 0);
+                    for (short j = 0; j < 5; j++)
                     {
                         if (!Begin) { return; }
                         Thread.Sleep(10);
@@ -138,7 +150,7 @@ namespace FarmingCSO2
 
                 }
 
-                ImitateOperating.MouseMove(screenWidth*2, 0);
+                ImitateOperating.MouseMove(screenWidth, 0);
 
                 for (int i = 0; i < 200; i++)
                 {
@@ -178,6 +190,16 @@ namespace FarmingCSO2
 
                 ImitateOperating.MouseLeftClick();
 
+            }
+        }
+
+        private void Delay(uint ms)
+        {
+            uint start = GetTickCount();
+            while (GetTickCount() - start < ms)
+            {
+                Application.DoEvents();
+                //Console.WriteLine((GetTickCount() - start).ToString());
             }
         }
 
