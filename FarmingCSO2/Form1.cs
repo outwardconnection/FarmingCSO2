@@ -12,6 +12,10 @@ using System.Threading;
 using System.IO;
 using System.Configuration;
 using System.Timers;
+using System.Windows.Input;
+using System.Diagnostics;
+using System.Media;
+using System.Resources;
 
 namespace FarmingCSO2
 {
@@ -32,25 +36,46 @@ namespace FarmingCSO2
         [DllImport("kernel32.dll")]
         private static extern uint GetTickCount();
 
-        private bool Begin { set; get; }
+        private bool BeginFarming { set; get; }
+        private bool BeginClicks = false;
         private Color[] startButtonColor = new Color[4];
         private IntPtr CSO2Window { set; get; }
         public static int screenWidth { get { return Screen.PrimaryScreen.Bounds.Width; } }
         private static int screenHeight { get { return Screen.PrimaryScreen.Bounds.Height; } }
 
+        HotKey farmingHotKey , clicksHotKey;
+        private bool farmingSound = true;
+        private bool farmingLow_key = false;
+        private int mouseClicksDelayTime = 100;
+
+        Setting settingForm;
+        private const string soundPath = "sound.mp3";
+
         public Form1()
         {
             InitializeComponent();
-            Begin = false;
-            this.Text = "CSO2掛機小幫手";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
-            this.Location = new System.Drawing.Point(screenWidth / 2 - this.Width / 2 , screenHeight / 2 - this.Width / 2);
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
+            BeginFarming = false;
+
+            settingForm = new Setting();
+            settingForm.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.settingsFormClosed);
+
+            farmingHotKey = new HotKey(this.Handle,settingForm.FarmingHotKey,Keys.None);
+            farmingHotKey.OnHotkey += new HotKey.HotkeyEventHandler(farmingOnHotKey);
+            clicksHotKey = new HotKey(this.Handle, settingForm.ClicksHotKey , Keys.None);
+            clicksHotKey.OnHotkey += new HotKey.HotkeyEventHandler(clicksOnHotKey);
+            farmingSound = settingForm.FarmingSound;
+            farmingLow_key = settingForm.FarmingLow_key;
+            mouseClicksDelayTime = settingForm.ClicksDelayTime;
+
+
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
+            this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
+            this.Location = new System.Drawing.Point( (screenWidth - this.Width) / 2, (screenHeight - this.Height) / 2);
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
             //MessageBox.Show("螢幕解析度為 " + screenWidth.ToString() + "*" + screenHeight.ToString());
             /*
             if(!ImitateOperating.InitSucess)
@@ -69,9 +94,7 @@ namespace FarmingCSO2
 
         public static void run(object source, System.Timers.ElapsedEventArgs e)
         {
-
             Console.WriteLine("OK");
-
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -91,20 +114,30 @@ namespace FarmingCSO2
             MessageBox.Show(message);
             */
 
-            if (Begin)
+            Farming();
+        }
+
+        private void settingButton_Click(object sender, EventArgs e)
+        {
+            this.Hide();
+            settingForm.MyShow();
+        }
+
+        private void Farming()
+        {
+            if (BeginFarming)
             {
                 TimerLabel.Hide();
                 button2.Text = "開始掛機";
-                Begin = false;
+                BeginFarming = false;
             }
             else
             {
                 if (true)
                 {
                     button2.Text = "停止掛機";
-                    Begin = true;
+                    BeginFarming = true;
                     TimerLabel.Show();
-                    Farming();
                 }
                 else
                 {
@@ -113,59 +146,90 @@ namespace FarmingCSO2
 
             }
 
-        }
+            for (int i = 0; i < 1000; i++)
+            {
+                if (i % 100 == 0)
+                {
+                    TimerLabel.Text = "還剩" + (10 - i / 100).ToString() + "秒";
+                }
+                if (!BeginFarming) { return; }
+                Thread.Sleep(10);
+                Application.DoEvents();
+            }
+            TimerLabel.Hide();
 
-        private void Farming()
-        {
+            if (farmingSound) { playSound(soundPath); }
+            //開始掛機
             while (true)
             {
-                for (int i = 0; i < 1000; i++)
-                {
-                    if (i % 100 == 0)
-                    {
-                        TimerLabel.Text = "還剩" + (10 - i / 100).ToString() + "秒";
-                    }
-                    if (!Begin) { return; }
-                    Thread.Sleep(10);
-                    Application.DoEvents();
-                }
-                TimerLabel.Hide();
-                
-                ImitateOperating.MouseMoveTo(screenWidth/2, screenHeight/2);
+                ImitateOperating.MouseMoveTo(screenWidth / 2, screenHeight / 2);
 
                 for (int i = 0; i < 200; i++)
                 {
-                    if (!Begin) { return; }
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
-                //一直往右滑
-                for(short i = 0 ; i < 20 ; i++)
+
+                if(farmingLow_key)
                 {
-                    ImitateOperating.MouseMove(screenWidth/2, 0);
-                    for (short j = 0; j < 5; j++)
+                    for (short j = 0; j < 5*20; j++)
                     {
-                        if (!Begin) { return; }
+                        if (!BeginFarming)
+                        {
+                            if (farmingSound) { playSound(soundPath); }
+                            return;
+                        }
                         Thread.Sleep(10);
                         Application.DoEvents();
                     }
+                }
+                else
+                {
+                    //瘋狂往右滑
+                    for (short i = 0; i < 20; i++)
+                    {
+                        ImitateOperating.MouseMove(screenWidth / 2, 0);
+                        for (short j = 0; j < 5; j++)
+                        {
+                            if (!BeginFarming)
+                            {
+                                if (farmingSound) { playSound(soundPath); }
+                                return;
+                            }
+                            Thread.Sleep(10);
+                            Application.DoEvents();
+                        }
 
+                    }
                 }
 
                 ImitateOperating.MouseMove(screenWidth, 0);
 
                 for (int i = 0; i < 200; i++)
                 {
-                    if (!Begin) { return; }
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
 
-                ImitateOperating.MouseMove((-1*screenWidth*2), 0);
+                ImitateOperating.MouseMove((-1 * screenWidth), 0);
 
                 for (int i = 0; i < 200; i++)
                 {
-                    if (!Begin) { return; }
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
@@ -175,25 +239,118 @@ namespace FarmingCSO2
                 ImitateOperating.MouseLeftClick();
                 for (int i = 0; i < 1000; i++)
                 {
-                    if (!Begin) { return; }
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
 
                 //按 開始/準備鍵
-                ImitateOperating.MouseMoveTo( (int)((float)1410/1536*screenWidth) , (int)((float)614/864*screenHeight));
+                ImitateOperating.MouseMoveTo((int)((float)1410 / 1536 * screenWidth), (int)((float)614 / 864 * screenHeight));
 
                 for (int i = 0; i < 200; i++)
                 {
-                    if (!Begin) { return; }
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
                     Thread.Sleep(10);
                     Application.DoEvents();
                 }
-
                 ImitateOperating.MouseLeftClick();
 
+                for (int i = 0; i < 1000; i++)
+                {
+                    if (!BeginFarming)
+                    {
+                        if (farmingSound) { playSound(soundPath); }
+                        return;
+                    }
+                    Thread.Sleep(10);
+                    Application.DoEvents();
+                }
             }
         }
+
+        private void MouseClicks(int delay = 100)
+        {
+            while(true)
+            {
+                ImitateOperating.MouseLeftClick();
+                for(int i=0;i<delay;i++)
+                {
+                    Application.DoEvents();
+                    if (!BeginClicks)
+                    {
+                        return;
+                    }
+                    Thread.Sleep(1);
+                }
+                    //Console.WriteLine((GetTickCount() - start).ToString());
+            }
+            
+        }
+
+        public void farmingOnHotKey(object sender, HotKey.HotKeyEventArgs e)
+        {
+            Farming();
+        }
+
+        public void clicksOnHotKey(object sender , HotKey.HotKeyEventArgs s)
+        {
+            if (BeginClicks)
+            {
+                BeginClicks = false;
+            }
+            else
+            {
+                BeginClicks = true;
+            }
+
+            MouseClicks(mouseClicksDelayTime);
+        }
+
+        public void settingsFormClosed(object sender, FormClosedEventArgs e)
+        {
+            farmingHotKey = new HotKey(this.Handle, settingForm.FarmingHotKey, Keys.None);
+            clicksHotKey = new HotKey(this.Handle, settingForm.ClicksHotKey, Keys.None);
+            farmingSound = settingForm.FarmingSound;
+            farmingLow_key = settingForm.FarmingLow_key;
+            mouseClicksDelayTime = settingForm.ClicksDelayTime;
+
+            this.Show();
+        }
+
+        private void playSound(string path)
+        {
+            WMPLib.WindowsMediaPlayer wplayer = new WMPLib.WindowsMediaPlayer();
+            wplayer.URL = path;
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    throw new FileNotFoundException();
+                }
+            }
+            catch(FileNotFoundException)
+            {
+                MessageBox.Show("找不到sound.mp3，將無法播放音效", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(ex.ToString(), "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+
+            }
+            
+            wplayer.controls.play();
+        }
+
 
         private void Delay(uint ms)
         {
@@ -207,9 +364,11 @@ namespace FarmingCSO2
 
         private void Form1_Closing(object sender, FormClosingEventArgs e)
         {
-            Begin = false;
+            BeginFarming = false;
+            BeginClicks = false;
             ImitateOperating.Shutdown();
-
+            farmingHotKey.Dispose();
+            clicksHotKey.Dispose();
         }
 
         public Color GetColor(int x, int y)
@@ -219,9 +378,9 @@ namespace FarmingCSO2
             ReleaseDC(CSO2Window, hdc);
             Color color = Color.FromArgb((int)(pixel & 0x000000FF), (int)(pixel & 0x0000FF00) >> 8, (int)(pixel & 0x00FF0000) >> 16);
             return color;
-        }
+        }  
     }
-    
+
     public class ImitateOperating
     {
         public const int KBC_KEY_CMD = 0x64;
@@ -689,6 +848,116 @@ namespace FarmingCSO2
         {
             if (move.X == 0 && move.Y == 0) { return; }
             SetCursorPos(Cursor.Position.X + move.X , Cursor.Position.Y + move.Y);
+        }
+
+    }
+
+    public class HotKey : IMessageFilter, IDisposable
+    {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        public static extern UInt32 GlobalAddAtom(String lpString);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern UInt32 RegisterHotKey(IntPtr hWnd, UInt32 id, UInt32 fsModifiers, UInt32 vk);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        public static extern UInt32 GlobalDeleteAtom(UInt32 nAtom);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern UInt32 UnregisterHotKey(IntPtr hWnd, UInt32 id);
+
+        IntPtr _hWnd = IntPtr.Zero;
+        UInt32 _hotKeyID;
+        Keys _hotKey = Keys.None;
+        Keys _comboKey = Keys.None;
+
+        public HotKey(IntPtr formHandle, Keys hotKey, Keys comboKey)
+        {
+            _hWnd = formHandle; //Form Handle, 註冊系統熱鍵需要用到這個
+            _hotKey = hotKey; //熱鍵
+            _comboKey = comboKey; //組合鍵, 必須設定Keys.Control, Keys.Alt, Keys.Shift, Keys.None以及Keys.LWin等值才有作用
+
+            UInt32 uint_comboKey; //由於API對於組合鍵碼的定義不一樣, 所以我們這邊做個轉換
+            switch (comboKey)
+            {
+                case Keys.Alt:
+                    uint_comboKey = 0x1;
+                    break;
+                case Keys.Control:
+                    uint_comboKey = 0x2;
+                    break;
+                case Keys.Shift:
+                    uint_comboKey = 0x4;
+                    break;
+                case Keys.LWin:
+                    uint_comboKey = 0x8;
+                    break;
+                default: //沒有組合鍵
+                    uint_comboKey = 0x0;
+                    break;
+            }
+
+            _hotKeyID = GlobalAddAtom(Guid.NewGuid().ToString()); //向系統取得一組id
+            RegisterHotKey((IntPtr)_hWnd, _hotKeyID, uint_comboKey, (UInt32)hotKey); //使用Form Handle與id註冊系統熱鍵
+            Application.AddMessageFilter(this); //使用HotKey類別來監視訊息
+        }
+
+        public delegate void HotkeyEventHandler(object sender, HotKeyEventArgs e); //HotKeyEventArgs是自訂事件參數
+        public event HotkeyEventHandler OnHotkey; //自訂事件
+
+        const int WM_GLOBALHOTKEYDOWN = 0x312; //當按下系統熱鍵時, 系統會發送的訊息
+
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (OnHotkey != null && m.Msg == WM_GLOBALHOTKEYDOWN && (UInt32)m.WParam == _hotKeyID) //如果接收到系統熱鍵訊息且id相符時
+            {
+                OnHotkey(this, new HotKeyEventArgs(_hotKey, _comboKey)); //呼叫自訂事件, 傳遞自訂參數
+                return true; //並攔截這個訊息, Form將不再接收到這個訊息
+            }
+
+            return false;
+        }
+
+        public class HotKeyEventArgs : EventArgs
+        {
+            private Keys _hotKey;
+            public Keys HotKey //熱鍵
+            {
+                get { return _hotKey; }
+                private set { }
+            }
+
+            private Keys _comboKey;
+            public Keys ComboKey //組合鍵
+            {
+                get { return _comboKey; }
+                private set { }
+            }
+
+            public HotKeyEventArgs(Keys hotKey, Keys comboKey)
+            {
+                _hotKey = hotKey;
+                _comboKey = comboKey;
+            }
+        }
+
+        private bool disposed = false;
+
+        public void Dispose()
+        {
+            if (!disposed)
+            {
+                UnregisterHotKey(_hWnd, _hotKeyID); //取消熱鍵
+                GlobalDeleteAtom(_hotKeyID); //刪除id
+                OnHotkey = null; //取消所有關聯的事件
+                Application.RemoveMessageFilter(this); //不再使用HotKey類別監視訊息
+
+                GC.SuppressFinalize(this);
+                disposed = true;
+            }
+        }
+
+        ~HotKey()
+        {
+            Dispose();
         }
 
     }
